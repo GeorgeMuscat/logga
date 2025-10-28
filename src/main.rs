@@ -2,7 +2,7 @@ use crate::send::Client;
 use anyhow::Result;
 use core::str;
 use std::{
-    io::{self, Write},
+    io::{Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 use tracing::{Level, info, span};
