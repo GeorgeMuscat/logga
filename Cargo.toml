@@ -4,8 +4,20 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
 aws-lc-rs = "1.14.1"
 quinn = { version = "0.11.9", features = ["rustls-ring"] }
 rcgen = "0.14.5"
-rustls = "0.23"
+rustls = { version = "0.23", feature = ["std"] }
 tokio = { version = "1.48.0", features = ["full"] }
+tracing = "0.1.41"
+
+[dependencies.uuid]
+version = "1.18.1"
+# Lets you generate random UUIDs
+features = [
+    "v4",
+]
+
+[dev-dependencies]
+x509-parser = "0.18.0"
