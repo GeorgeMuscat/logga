@@ -1,10 +1,7 @@
 use crate::send::Client;
 use anyhow::Result;
 use core::str;
-use std::{
-    io::{Write},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{Level, info, span};
 
 mod receive;

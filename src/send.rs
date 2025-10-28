@@ -1,13 +1,12 @@
 use anyhow::Result;
 use quinn::crypto::rustls::QuicClientConfig;
-use quinn::{ClientConfig, Connection, Endpoint};
+use quinn::{Connection, Endpoint};
 use rustls::pki_types::CertificateDer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 pub struct Client {
     // Need to track all the certs we trust.
-    config: ClientConfig,
     trusted_certs: rustls::RootCertStore,
     pub endpoint: Endpoint,
     pub connections: Vec<Connection>,
@@ -24,7 +23,6 @@ impl Client {
             quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(client_crypto)?));
         endpoint.set_default_client_config(client_config.clone());
         Ok(Client {
-            config: client_config,
             trusted_certs: rustls::RootCertStore::empty(),
             endpoint: endpoint,
             connections: vec![],

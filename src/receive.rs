@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 
 use quinn::{Endpoint, ServerConfig, VarInt};
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
-use std::{io::Write, net::SocketAddr, str, sync::Arc};
+use std::{net::SocketAddr, str, sync::Arc};
 use tracing::info;
 use uuid::Uuid;
 pub struct Server {
