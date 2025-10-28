@@ -94,7 +94,7 @@ async fn many_to_many() -> Result<()> {
     }
     // In order to reliably close the connection, we need to have it such that the final message and all prior messages being sent (regardless of direction) are successfully read in to the application.
     // Whether this is the traditional "client" (the initiator of the connection) or "server" (the listener) depends on the application protocol.
-    // In this "protocol", we expect the final message to be sent from the "server" (thus, the sender) and received by the "client" (thus, the receiver).
+    // In this demo protocol, we expect the final message to be sent from the "server" (thus, the sender) and received by the "client" (thus, the receiver).
     //
     // This means it is on the "client" to terminate the connection once it is sure that all of the reply message has been received.
     // We know the message has been received properly when we the server calls `send.finish()`. As each connection only has a single stream, we know that we can kill the connection.
@@ -102,9 +102,16 @@ async fn many_to_many() -> Result<()> {
     //
     // https://www.iroh.computer/blog/closing-a-quic-connection
     //
-    //  it is good practice to have the `receiver` (e.g. server) close the connection if there are no more open streams (the sender must still inform the recipient that the specific stream will have no more data sent over it).
-    // This requires that the application protocol that we use on top of QUIC (e.g. HTTP) to define when the connection should be closed.
-    // As this is just an example, we can consider in our application procotol, that a single response from the server is the final data we expect to receive.
+    // I think it is good practice to have the peer that is the last to read from their respective stream to be the one to close the connection (assuming that both peers are confident that no more streams will be opened).
+    // This means that if we have a bi-directional stream between peers A and B (A <-> B). It is also important to remember that even though a peer has finished writing to a stream (e.g. A->B), we cannot be sure that the other peer has fully read from the stream in to the application.
+    // The stream can only be considered "fully used" once both peers can be certain that that stream has been BOTH:
+    //     i)  Finished being written to
+    //     ii) Finished being read from
+    //
+    // For example, assuming that only one stream will be used per connection, if A informs B that it has finished writing to the stream A->B and then B informs A that it has finished reading from the A->B stream (either through an explicit message or through application behaviour), but B has not informed A that is finished with the stream both peers should maintain the connection.
+    //
+    // Once B has informed A that is no longer writing to the B->A stream, and A has finished reading from the buffer, A knows both streams are done with and knows it is safe to close the connection.
+    // It is important to note that B cannot close the connection even though it is aware that the A->B stream has been finished with and the B->A stream has had all the data written to it, because the B cannot be sure that A has finished reading from it.
 
     for handle in handles {
         handle.await??;
