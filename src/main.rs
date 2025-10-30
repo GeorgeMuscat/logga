@@ -2,53 +2,52 @@ use crate::send::Client;
 use anyhow::Result;
 use core::str;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use tracing::{Level, info, span};
 
 mod receive;
 mod send;
 
-async fn many_to_many() -> Result<()> {
+/// Will have issues if `n_clients` and `n_servers` are too big (i.e. n_clients + n_servers > available ports)
+/// Also will probably have issues for other reasons (e.g. logging to stdout) before you reach those numbers...
+/// This function does not do things perfectly at all, but this is hopefully to make it easier to understand.
+async fn many_to_many(n_clients: u16, n_servers: u16) -> Result<()> {
     // Want to create many servers and have many clients connect to many servers.
-    let span = span!(Level::TRACE, "many_to_many");
-    let _enter = span.enter();
-    info!("SPAN");
-    let base_srv_port = 6666;
+    const BASE_SRV_PORT: u16 = 6666;
     let mut certs = vec![];
     let mut clients = vec![];
-    for i in 0..3 {
-        // Create a server and client for each loop
-
+    for i in 0..n_servers {
+        // Create servers, record their certs to import to clients and start the servers.
         let srv = receive::Server::new(None).unwrap();
-
         certs.push(srv.get_cert().clone());
         tokio::spawn(async move {
             srv.serve(SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
-                base_srv_port + i,
+                BASE_SRV_PORT + i,
             ))
             .await?;
             Ok::<(), anyhow::Error>(())
         });
+    }
+
+    for _ in 0..n_clients {
+        // TIL: setting port to 0 just picks any free port
         clients.push(Client::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)).unwrap());
     }
 
-    for i in 0..3 {
-        for srv_idx in 0..3 {
+    for client in clients.iter_mut() {
+        for srv_idx in 0..n_servers {
             // Register cert w client and then connect
-            clients[i].trust_cert(certs[srv_idx].clone())?;
-            clients[i]
+            client.trust_cert(certs[srv_idx as usize].clone())?;
+            client
                 .connect(
                     SocketAddr::new(
                         IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        base_srv_port + (srv_idx as u16),
+                        BASE_SRV_PORT + (srv_idx as u16),
                     ),
                     "localhost",
                 )
                 .await?;
         }
     }
-
-    info!("registered certs");
 
     let mut handles = vec![];
 
@@ -63,10 +62,11 @@ async fn many_to_many() -> Result<()> {
                 // Let the recipient know that we are not sending any more data over this stream.
                 send.finish()?;
 
-                // We likely don't even need this stopped call because the application will wait until we get all the data from the server.
-                // Due to how we have designed the application, this will only happen
-                let stopped_fut = send.stopped();
+                // We  don't need this stopped call because the server will not send a reply message until it has finished reading our "Hello" message.
+                // Keep this in for demo's sake
+                send.stopped().await?;
 
+                // Don't need to wait to receive the finish() because that is handled by the read_to_end() command.
                 let resp = recv.read_to_end(usize::MAX).await?;
 
                 // We don't escape the content sent from the server because this is a demo/poc
@@ -76,15 +76,9 @@ async fn many_to_many() -> Result<()> {
                     str::from_utf8(&resp)?
                 );
 
-                stopped_fut.await?;
-
-                // Don't need to wait to receive the finish() because that is handled by the read_to_end() command.
-
-                // Can safely close these stream(s) (which automatically happens when we drop the stream(s), but we are doing it explicitly just cause)
+                // Can safely close these stream(s) (which automatically happens when we drop the stream(s), but we are doing it explicitly for sake of the demo)
                 // see below for more detailed explanation.
                 conn.close(0u32.into(), b"done");
-
-                // Don't call Endpoint::wait_idle() until ALL connections have finished.
 
                 // Assume that we are only waiting for one message and the connection can be closed. This is an example of an application protocol determining when we are done.
                 // In HTTP3, it seems that each request creates a new bi-directional stream on the existing connection, so we could do that too.
@@ -125,5 +119,5 @@ async fn main() -> Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
-    many_to_many().await
+    many_to_many(10, 10).await
 }
