@@ -3,9 +3,22 @@ name = "logga"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "loggalib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "loggabin"
+path = "src/bin.rs"
+
+[[bin]]
+name = "loggademo"
+path = "demo/main.rs"
+
 [dependencies]
 anyhow = "1.0.100"
 aws-lc-rs = "1.14.1"
+futures = "0.3.31"
 quinn = { version = "0.11.9", features = ["rustls-ring"] }
 rcgen = "0.14.5"
 rustls = { version = "0.23" }

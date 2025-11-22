@@ -8,8 +8,8 @@ use std::sync::Arc;
 pub struct Client {
     // Need to track all the certs we trust.
     trusted_certs: rustls::RootCertStore,
-    endpoint: Endpoint,
-    pub connections: Vec<Connection>,
+    // The endpoint contains the ClientConfig.
+    pub endpoint: Endpoint,
 }
 
 impl Client {
@@ -25,7 +25,6 @@ impl Client {
         Ok(Client {
             trusted_certs: rustls::RootCertStore::empty(),
             endpoint: endpoint,
-            connections: vec![],
         })
     }
 
@@ -52,12 +51,7 @@ impl Client {
         server_addr: SocketAddr,
         server_name: &str,
     ) -> Result<Connection> {
-        let conn = self
-            .endpoint
-            .connect(server_addr, server_name)?
-            .await
-            .unwrap();
-        self.connections.push(conn.clone());
+        let conn = self.endpoint.connect(server_addr, server_name)?.await?;
         Ok(conn)
     }
 }
