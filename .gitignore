@@ -35,3 +35,5 @@ go.work.sum
 # Added by cargo
 
 /target
+# Ignore any log files that might be used for testing
+*.log

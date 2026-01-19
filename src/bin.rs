@@ -1,10 +1,7 @@
-use std::{fs::File, path::PathBuf};
-
-use anyhow::Result;
-use loggalib::comms::recv::Server;
-use tokio::sync::mpsc;
-
 use crate::module::{FileSink, FileSource};
+use anyhow::Result;
+use std::path::PathBuf;
+use tokio::sync::mpsc;
 
 mod agent;
 mod module;
@@ -25,13 +22,12 @@ async fn main() -> Result<()> {
     //
     // TODO: When configs eventually become a thing, we would essentially construct a graph of flows,
     // and create mpsc channels from "right to left" or "sink to source"
-    let (mut send, mut recv) = mpsc::channel::<&[u8]>(100); // TODO: create a sensible default and a method to customise based on Bytes or something
+    let (send, recv) = mpsc::channel::<Vec<u8>>(100); // TODO: create a sensible default and a method to customise based on Bytes or something
     let output_path = PathBuf::from("./test-out.log");
-    let delimiter = "\n".as_bytes();
+    let delimiter = "\n".as_bytes()[0];
     let output = FileSink::new("Sink1".to_string(), output_path.clone(), delimiter, recv).await?;
 
     let input_path = PathBuf::from("./test-in.log");
-    dbg!(&input_path);
     let input =
         FileSource::new_with_channels("Source1".to_string(), input_path, delimiter, vec![send])
             .await?;
@@ -39,7 +35,7 @@ async fn main() -> Result<()> {
     // Create threads, one per module for now.
     // TODO: Consider how we handle one of the threads crashing/stopping.
     // TODO: In future there might be smarter ways to do threading.
-    tokio::spawn(output.start());
-    tokio::spawn(input.start());
+    let (_, _) = tokio::join!(tokio::spawn(output.start()), tokio::spawn(input.start()));
+
     Ok(())
 }

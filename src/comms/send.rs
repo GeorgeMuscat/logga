@@ -24,7 +24,7 @@ impl Client {
         endpoint.set_default_client_config(client_config.clone());
         Ok(Client {
             trusted_certs: rustls::RootCertStore::empty(),
-            endpoint: endpoint,
+            endpoint,
         })
     }
 

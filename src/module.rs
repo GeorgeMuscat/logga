@@ -1,8 +1,10 @@
+#![allow(dead_code)]
 use anyhow::Result;
+use itertools::Itertools;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tokio::{
-    fs::File,
-    io::{AsyncBufRead, AsyncReadExt, BufReader},
+    fs::{File, OpenOptions},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::mpsc::{Receiver, Sender},
 };
 trait Module<I, O> {
@@ -16,8 +18,11 @@ trait Source {}
 
 // Make his module implement whatever trais is "Output" as it provides a stream to
 trait Sink {}
-
-pub struct FileSource<'a, T> {
+// Originally had this as a generic, however instead maybe it makes more sense to have types to be on a "processor".
+// Maybe something like Processor<I, O>
+// Maybe we need this on traits, such that we have Source<O> and Sink<I>. This would then have a method such as send and recv.
+// Essentially we can think of source and sinks as wrappers around channels.
+pub struct FileSource {
     // Going to start with an implementation that should be simple and
     // Need to decide how to handle the case where the file moves, both when we are in the middle or reading or not currently reading.
     // https://docs.rs/inotify/latest/inotify/ can maybe use this to have really efficient reading of files
@@ -28,31 +33,32 @@ pub struct FileSource<'a, T> {
     name: String,
     path: PathBuf,
     file: File,
-    delimiter: &'a [u8],
-    out_chans: Vec<Sender<T>>,
+    delimiter: u8,
+    out_chans: Vec<Sender<Vec<u8>>>,
 }
 
-pub struct FileSink<'a, T> {
+pub struct FileSink {
     name: String,
     path: PathBuf,
     file: File,
-    delimiter: &'a [u8],
-    inp_chan: Receiver<T>,
+    delimiter: u8,
+    inp_chan: Receiver<Vec<u8>>,
 }
 
-impl<'a, T> FileSource<'a, T> {
-    pub async fn new(name: String, path: PathBuf, delimiter: &'a [u8]) -> Result<Self> {
+impl FileSource {
+    pub async fn new(name: String, path: PathBuf, delimiter: u8) -> Result<Self> {
         Self::new_with_channels(name, path, delimiter, vec![]).await
     }
 
     pub async fn new_with_channels(
         name: String,
         path: PathBuf,
-        delimiter: &'a [u8],
-        channels: impl IntoIterator<Item = tokio::sync::mpsc::Sender<T>>,
+        delimiter: u8,
+        channels: impl IntoIterator<Item = Sender<Vec<u8>>>,
     ) -> Result<Self> {
         // Open this here, because we want to stop
-        let file = File::open(&path).await?;
+        let mut file = File::open(&path).await?;
+        file.set_max_buf_size(16 * 1024);
         Ok(Self {
             name,
             path,
@@ -62,28 +68,57 @@ impl<'a, T> FileSource<'a, T> {
         })
     }
 
-    pub fn register_channel(&mut self, channel: Sender<T>) -> Result<()> {
+    pub fn register_channel(&mut self, channel: Sender<Vec<u8>>) -> Result<()> {
         self.out_chans.push(channel);
         Ok(())
     }
 
     pub async fn start(self) -> Result<()> {
-        let mut reader = BufReader::new(self.file.try_clone().await?);
+        let file = self.file;
+
+        let mut buf = vec![];
+
+        let mut reader = BufReader::with_capacity(4 * 2048, file);
         loop {
-            // Keep reading from the file until EOF.
-            // TODO: impl
+            let read_result = reader.read_until(self.delimiter, &mut buf).await;
+
+            while let Some(idx) = buf.iter().position(|b| b == &self.delimiter) {
+                // Drop the delimiter, as we don't want to the send it to a receiving module.
+                let msg = buf.drain(..=idx).dropping_back(1).collect::<Vec<u8>>();
+                for chan in &self.out_chans {
+                    chan.send(msg.clone()).await?
+                }
+            }
+
+            if let Err(err) = read_result {
+                // Send what we have and return.
+                let msg = buf;
+                for chan in &self.out_chans {
+                    chan.send(msg.clone()).await?
+                }
+                return Err(err.into());
+            } else {
+                let count = read_result.unwrap();
+                if count == 0 {
+                    return Ok(());
+                }
+            }
         }
     }
 }
 
-impl<'a, T> FileSink<'a, T> {
+impl FileSink {
     pub async fn new(
         name: String,
         path: PathBuf,
-        delimiter: &'a [u8],
-        recv: Receiver<T>,
+        delimiter: u8,
+        recv: Receiver<Vec<u8>>,
     ) -> Result<Self> {
-        let file = File::open(&path).await?;
+        let file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&path)
+            .await?;
         Ok(Self {
             name,
             path,
@@ -93,7 +128,17 @@ impl<'a, T> FileSink<'a, T> {
         })
     }
 
-    pub async fn start(self) -> Result<()> {
+    pub async fn start(mut self) -> Result<()> {
+        let mut file = self.file;
+        while let Some(mut msg) = self.inp_chan.recv().await {
+            // Write each byte and add the delimiter specified
+            // TODO: check if this make msg expand an unreasonable amount (both size and freq)
+            msg.push(self.delimiter);
+            file.write_all(msg.as_ref()).await?;
+
+            // For now, just flush every time.
+            file.flush().await?
+        }
         Ok(())
     }
 }
