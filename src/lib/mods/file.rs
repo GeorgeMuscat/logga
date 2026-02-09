@@ -98,7 +98,7 @@ impl FileSink {
         name: String,
         path: PathBuf,
         delimiter: u8,
-        recv: Receiver<Vec<u8>>,
+        inp_chan: Receiver<Vec<u8>>,
     ) -> Result<Self> {
         let file = OpenOptions::new()
             .append(true)
@@ -110,7 +110,7 @@ impl FileSink {
             path,
             file,
             delimiter,
-            inp_chan: recv,
+            inp_chan,
         })
     }
 

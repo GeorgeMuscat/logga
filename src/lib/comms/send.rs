@@ -9,11 +9,13 @@ pub struct Client {
     // Need to track all the certs we trust.
     trusted_certs: rustls::RootCertStore,
     // The endpoint contains the ClientConfig.
+    // We only need a single endpoint as it acts as both the traditional server and client.
     pub endpoint: Endpoint,
 }
 
 impl Client {
-    pub fn new(bind_addr: SocketAddr) -> Result<Self> {
+    pub fn new_no_client_auth(bind_addr: SocketAddr) -> Result<Self> {
+        // This function is marked as dangerous as it does no client authentication.
         let mut endpoint = Endpoint::client(bind_addr)?;
         let client_crypto = rustls::ClientConfig::builder()
             .with_root_certificates(rustls::RootCertStore::empty())
