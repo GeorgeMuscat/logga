@@ -6,11 +6,11 @@ default-run = "loggabin"
 
 [lib]
 name = "loggalib"
-path = "src/lib.rs"
+path = "src/lib/lib.rs"
 
 [[bin]]
 name = "loggabin"
-path = "src/bin.rs"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "loggademo"

@@ -1,12 +1,8 @@
-use crate::file::{FileSink, FileSource};
 use anyhow::Result;
+use loggalib::mods::file::{FileSink, FileSource};
 use std::path::PathBuf;
+
 use tokio::sync::mpsc;
-
-mod agent;
-mod file;
-mod module;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     rustls::crypto::ring::default_provider()
