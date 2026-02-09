@@ -1,9 +1,10 @@
-use crate::module::{FileSink, FileSource};
+use crate::file::{FileSink, FileSource};
 use anyhow::Result;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 mod agent;
+mod file;
 mod module;
 
 #[tokio::main]
