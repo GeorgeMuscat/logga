@@ -116,7 +116,7 @@ async fn many_to_many(n_clients: u16, n_servers: u16) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    rustls::crypto::ring::default_provider()
+    rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
     many_to_many(10, 10).await
