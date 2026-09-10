@@ -18,13 +18,28 @@ path = "demo/main.rs"
 
 [dependencies]
 anyhow = "1.0.100"
-aws-lc-rs = "1.14.1"
 bytes = "1.11.0"
 futures = "0.3.31"
 itertools = "0.14.0"
-quinn = { version = "0.11.9", features = ["rustls-ring"] }
-rcgen = "0.14.5"
-rustls = { version = "0.23" }
+
+quinn = {
+    version = "0.11.11",
+    default-features = false,
+    features = ["runtime-tokio", "rustls-aws-lc-rs"]
+}
+
+rcgen = {
+    version = "0.14.7",
+    default-features = false,
+    features = ["aws_lc_rs", "x509-parser"]
+}
+
+rustls = {
+    version = "0.23",
+    default-features = false,
+    features = ["std", "aws_lc_rs"]
+}
+
 tokio = { version = "1.48.0", features = ["full"] }
 tracing = "0.1.41"
 
