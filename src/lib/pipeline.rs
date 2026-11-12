@@ -1,32 +1,85 @@
 //! Public API for building a pipeline of modules to process logs.
 
-use std::collections::HashMap;
+use derive_more::{Add, Display, From};
+use std::collections::HashSet;
 
 use crate::{LogSink, LogSource};
 
+#[derive(Eq, PartialEq, From, Add, Clone, Copy, Hash, Debug, Display)]
 pub struct SourceId(usize);
+
+#[derive(Eq, PartialEq, From, Add, Clone, Copy, Hash, Debug, Display)]
 pub struct SinkId(usize);
 
+#[derive(Debug)]
+pub enum BuildError {
+    UnknownSource(SourceId),
+    UnknownSink(SinkId),
+    DuplicateConnection { source: SourceId, sink: SinkId },
+}
+
+impl std::fmt::Display for BuildError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownSource(id) => {
+                write!(f, "unknown source: {id:?}")
+            }
+            Self::UnknownSink(id) => {
+                write!(f, "unknown sink: {id:?}")
+            }
+            Self::DuplicateConnection { source, sink } => {
+                write!(f, "duplicate connection: {source:?} -> {sink:?}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BuildError {}
 pub struct PipelineBuilder {
     // Need a way to track the sources, sinks and connections prior to when we call build.
-    source_map: HashMap<SourceId, Box<dyn LogSource>>,
-    sink_map: HashMap<SinkId, Box<dyn LogSource>>,
-    connections: Vec<(SourceId, SinkId)>
-
-};
+    // TODO: consider using something like a vec, as ids are currently just usize and we can use that as index.
+    sources: Vec<Box<dyn LogSource>>,
+    sinks: Vec<Box<dyn LogSink>>,
+    connections: HashSet<(SourceId, SinkId)>,
+}
 
 pub struct Pipeline;
 pub struct RunningPipeline;
 
 impl PipelineBuilder {
+    pub fn new() -> PipelineBuilder {
+        Self {
+            sources: vec![],
+            sinks: vec![],
+            connections: HashSet::new(),
+        }
+    }
+
     // NEXT: implement these here.
     // THEN look at src/lib/module.rs and figure out if we want to change what is pub.
     // THEN implement the old file logic in the new module style, write a test, create a pipeline and pass.
-    pub fn add_source(&mut self, source: impl LogSource) {
-
+    pub fn add_source(&mut self, source: impl LogSource) -> SourceId {
+        self.sources.push(Box::new(source));
+        SourceId(self.sources.len() - 1)
     }
 
-    pub fn add_sink(&mut self, sink: impl LogSink) {}
+    pub fn add_sink(&mut self, sink: impl LogSink) -> SinkId {
+        self.sinks.push(Box::new(sink));
+        SinkId(self.sinks.len() - 1)
+    }
 
-    pub fn connect(&mut self, source: SourceId, sink: SinkId) -> Result<(), BuildError> {}
+    pub fn connect(&mut self, source: SourceId, sink: SinkId) -> Result<(), BuildError> {
+        // TODO: Consider doing more validation here?
+        if !self.connections.contains(&(source, sink)) {
+            return Err(BuildError::DuplicateConnection { source, sink });
+        }
+        self.connections.insert((source, sink));
+        Ok(())
+    }
+}
+
+impl Default for PipelineBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }

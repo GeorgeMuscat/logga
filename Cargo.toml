@@ -19,6 +19,7 @@ path = "demo/main.rs"
 [dependencies]
 anyhow = "1.0.100"
 bytes = "1.11.0"
+derive_more =  { version = "2.1.1", features = ["full"] }
 futures = "0.3.31"
 itertools = "0.14.0"
 
