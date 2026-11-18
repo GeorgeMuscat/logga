@@ -2,6 +2,7 @@
 
 use derive_more::Display;
 use std::collections::HashSet;
+use tokio::io::Sink;
 
 use crate::{LogSink, LogSource};
 
@@ -16,6 +17,8 @@ pub enum BuildError {
     UnknownSource(SourceId),
     UnknownSink(SinkId),
     DuplicateConnection { source: SourceId, sink: SinkId },
+    UnconnectedSource(SourceId),
+    UnconnectedSink(SinkId),
 }
 
 impl std::fmt::Display for BuildError {
@@ -29,6 +32,12 @@ impl std::fmt::Display for BuildError {
             }
             Self::DuplicateConnection { source, sink } => {
                 write!(f, "duplicate connection: {source:?} -> {sink:?}")
+            }
+            Self::UnconnectedSource(id) => {
+                write!(f, "unconnected source: {id:?}")
+            }
+            Self::UnconnectedSink(id) => {
+                write!(f, "unconnected sink: {id:?}")
             }
         }
     }
@@ -66,12 +75,20 @@ impl PipelineBuilder {
     // THEN look at src/lib/module.rs and figure out if we want to change what is pub.
     // THEN implement the old file logic in the new module style, write a test, create a pipeline and pass.
     pub fn add_source(&mut self, source: impl LogSource) -> SourceId {
-        self.sources.push(Box::new(source));
-        SourceId(self.sources.len() - 1)
+        self.add_boxed_source(Box::new(source))
     }
 
     pub fn add_sink(&mut self, sink: impl LogSink) -> SinkId {
-        self.sinks.push(Box::new(sink));
+        self.add_boxed_sink(Box::new(sink))
+    }
+
+    pub fn add_boxed_source(&mut self, source: Box<dyn LogSource>) -> SourceId {
+        self.sources.push(source);
+        SourceId(self.sources.len() - 1)
+    }
+
+    pub fn add_boxed_sink(&mut self, sink: Box<dyn LogSink>) -> SinkId {
+        self.sinks.push(sink);
         SinkId(self.sinks.len() - 1)
     }
 
@@ -80,6 +97,15 @@ impl PipelineBuilder {
         if self.connections.contains(&(source, sink)) {
             return Err(BuildError::DuplicateConnection { source, sink });
         }
+
+        if source.0 >= self.sources.len() {
+            return Err(BuildError::UnknownSource(source));
+        }
+
+        if sink.0 >= self.sinks.len() {
+            return Err(BuildError::UnknownSink(sink));
+        }
+
         self.connections.insert((source, sink));
         Ok(())
     }
@@ -87,6 +113,32 @@ impl PipelineBuilder {
     pub fn build(self) -> Result<Pipeline, BuildError> {
         // TODO: impl
         // validate and set up a structure of modules that are sending to each other
+
+        // we know that we cannot have any duplicate connections or invalid source ids in connections at this stage.
+        // There could still be sources or sinks that are not connected, need to weed those out first.
+
+        {
+            let mut connected_sources = vec![false; self.sources.len()];
+            let mut connected_sinks = vec![false; self.sinks.len()];
+
+            for (source, sink) in self.connections {
+                connected_sources[source.0] = true;
+                connected_sinks[sink.0] = true;
+            }
+
+            if let Some(idx) = connected_sources.iter().position(|x| x == &false) {
+                return Err(BuildError::UnconnectedSource(SourceId(idx)));
+            }
+
+            if let Some(idx) = connected_sinks.iter().position(|x| x == &false) {
+                return Err(BuildError::UnconnectedSink(SinkId(idx)));
+            }
+
+            // All sources and sinks appear as a connection at least once
+        }
+
+        // Find any dangling
+        todo!()
     }
 }
 
