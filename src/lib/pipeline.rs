@@ -137,7 +137,9 @@ impl PipelineBuilder {
             // All sources and sinks appear as a connection at least once
         }
 
-        // Find any dangling
+        // Start connecting the pipes!
+        // Each sink will need to store a consumer side of the mpsc.
+        // TODO
         todo!()
     }
 }
