@@ -1,14 +1,14 @@
 //! Public API for building a pipeline of modules to process logs.
 
-use derive_more::{Add, Display, From};
+use derive_more::Display;
 use std::collections::HashSet;
 
 use crate::{LogSink, LogSource};
 
-#[derive(Eq, PartialEq, From, Add, Clone, Copy, Hash, Debug, Display)]
+#[derive(Eq, PartialEq, Clone, Copy, Hash, Debug, Display)]
 pub struct SourceId(usize);
 
-#[derive(Eq, PartialEq, From, Add, Clone, Copy, Hash, Debug, Display)]
+#[derive(Eq, PartialEq, Clone, Copy, Hash, Debug, Display)]
 pub struct SinkId(usize);
 
 #[derive(Debug)]
@@ -43,7 +43,14 @@ pub struct PipelineBuilder {
     connections: HashSet<(SourceId, SinkId)>,
 }
 
-pub struct Pipeline;
+// `Pipeline` needs to hold
+// - A reference to each module, so that the pipeline can be started
+//
+// `Pipeline` should only be obtainable by calling `build` on a `PipelineBuilder`
+pub struct Pipeline {
+    sources: Vec<Box<dyn LogSource>>,
+    sinks: Vec<Box<dyn LogSink>>,
+}
 pub struct RunningPipeline;
 
 impl PipelineBuilder {
@@ -70,11 +77,16 @@ impl PipelineBuilder {
 
     pub fn connect(&mut self, source: SourceId, sink: SinkId) -> Result<(), BuildError> {
         // TODO: Consider doing more validation here?
-        if !self.connections.contains(&(source, sink)) {
+        if self.connections.contains(&(source, sink)) {
             return Err(BuildError::DuplicateConnection { source, sink });
         }
         self.connections.insert((source, sink));
         Ok(())
+    }
+
+    pub fn build(self) -> Result<Pipeline, BuildError> {
+        // TODO: impl
+        // validate and set up a structure of modules that are sending to each other
     }
 }
 
